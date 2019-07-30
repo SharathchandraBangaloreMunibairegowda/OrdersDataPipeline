@@ -1,0 +1,80 @@
+---
+title: "Orders Analysis"
+author: "Sharathchandra BM"
+---
+
+Libraries used
+
+```{r}
+library(dplyr)
+library(knitr)
+library(lubridate)
+library(ggplot2)
+```
+
+Data is read into for processing
+
+```{r}
+data <- read.csv("C:/Users/Sharathchandra/Desktop/Skill Assessment/Klaviyo/screening_exercise_orders_v201810.csv", header = T, stringsAsFactors = F)
+```
+
+Questions asked and answered below with code chunks.
+
+A) Assemble a dataframe with one row per customer and the following columns:
+    * customer_id
+    * gender
+    * most_recent_order_date
+    * order_count (number of orders placed by this customer)
+Sort the dataframe by customer_id ascending and display the first 10 rows.
+
+Answer:
+There were rows which were multiple transactions (orders) done by customer with different time stamps. They had to be grouped by customer_id, order_count columns contains number of orders done and most_recent_order_date i.e. recent transaction time stamp of order is taken. The dataframe is sorted in ascending order and only first 10 rows are displayed in this notebook.
+
+```{r}
+customerOrderCount <- data %>% group_by(customer_id) %>% mutate(order_count=n()) %>% slice(which.max(as.POSIXct(date))) %>% select(customer_id,gender,most_recent_order_date=date,order_count)
+top10customerOrderCount <- customerOrderCount[c(1:10),]
+top10customerOrderCount
+```
+
+B) Plot the count of orders per week for the store.
+
+Answer:
+There are 53 weeks in a year. Thus, data$date is mutated by week number. The orders are summarized count and a bar plot (visually appealing) is created. 
+
+```{r}
+ordersWeek <- data %>% mutate(week_of_the_year=week(date))
+ordersPerWeek <- ordersWeek %>% group_by(week_of_the_year) %>% summarise(number_of_orders=n())
+plot <- ggplot(data = ordersPerWeek) + geom_bar(mapping = aes(x=week_of_the_year,y=number_of_orders, fill = number_of_orders),stat = "identity", position = "dodge") + labs(x="Weeks' Number", y="Number Of Orders Per Week", title = "Number Of Orders Per Week (2017)") + theme(panel.background = element_blank()) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + coord_flip() + geom_text(aes(x=week_of_the_year,y=number_of_orders, label = number_of_orders), hjust = -0.5, size = 2, inherit.aes = TRUE) + theme_bw()
+plot
+```
+
+C) Compute the mean order value for gender 0 and for gender 1. Do you think the difference is significant?
+
+Answer:
+The mean order values for gender=0 and gender=1 are 363.89 & 350.70 respectively. To see if the difference is significant, I have performed t-testing/null hypothesis to check for p-value with 95% confidence. Meaning alpha(threshold) = 0.05. We can see from the results that p-value = 0.04816 lesser than 0.05 i.e. threshold value. Therefore, with 95% confidence I can reject this hypothesis meaning, the difference is not significant.
+
+```{r}
+meanOrderByGender <- data %>% group_by(gender) %>% summarise(mean_order=mean(value))
+gender0 <- data %>% filter(gender==0)
+gender1 <- data %>% filter(gender==1)
+t.test(x = gender0$value,y=gender1$value,alternative = "two.sided")
+```
+
+D) Assuming a single gender prediction was made for each customer, generate a confusion matrix for predicted gender. What does the confusion matrix tell you about the quality of the predictions?
+
+Answer:
+I wanted to use confusionmatrix() but because of higher version R, I couldn't install "caret" library. But here, as we are assuming single gender prediction case is considered (I have considered gender prediction = 1 for all), FN and TN will be equal to zero. The positive count is TP = 6712 and rest of FP = 6759. 
+
+Thereforen the metrics wil be:
+Accuracy: TP+TN/(TP+FP+FN+TN) => 6712/13471 = 0.4982 (49.82% accurate model)
+Precision: TP/(TP+FP) = Accuracy = 0.4982 (49.82% precise model)
+Recall: TP/(TP+FN) = 6712/6712 = 1
+
+The quality of prediction is 50% accurate due to gender column values are not left or right skewed. Meaning equal number of gender = 0 and gender = 1 values are present. We can also notice that recall = 1 meaning our precision of classifying genders is less and is biased to capturing only gender = 1 customers. We captured all gender = 1 customers but also missed out a lot on capturing gender = 0 customers.
+
+```{r}
+data2 <- data %>% group_by(customer_id,gender) %>% select(customer_id,gender,predicted_gender)
+data2$predicted_gender <- 1
+data2$positiveCount <- ifelse(data2$gender == data2$predicted_gender, 1, 0)
+sum(data2$positiveCount)
+```
